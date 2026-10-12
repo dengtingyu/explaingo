@@ -1,56 +1,46 @@
-# GoQueen：19路围棋桥接实验
+# GoQueen：19 路围棋研究源码
 
-## 总览
+当前代码包含辅助选点（APS）、从 APS 起步的自然 Q/K 训练，以及固定权重训练题评估。目标仍是让语言模型按文字坐标读取棋盘；可靠自然选点、通用围棋理解与棋力尚未建立。
 
-目标是把冻结的KataGo棋盘特征接入冻结的Qwen3-0.6B，训练桥接参数回答棋盘问题。当前发布子目录提供M-APS辅助点位选择模块、实际批次路由、变体权重加载、单次有上限拟合入口及必要的第一方源码。
+## 当前结果
 
-| 项目 | 当前状态 |
+| 路径 | 已保存的观察结果 | 边界 |
+|---|---|---|
+| APS 外部指定点位 | 21 道训练题全部正确；固定 54 题辅助评估全部正确 | 不证明模型自行找到所问点 |
+| APS 起步自然 Q/K，1,000 次更新 | 同一 54 题从 18/54 到 18/54；三类 CE 从 7.9614 降至 1.1670 | 分数变化，正确率未提高 |
+| 固定最终权重评估实际训练题 | 1,256/2,702（46.4841%）；宏平均召回率 43.2578%；按 4,000 次曝光加权为 43.4% | 训练题仍未充分拟合，不能唯一定位训练预算或接入结构 |
+
+这些是项目保存记录的摘要。本目录提供源码、测试源码、配置和技术说明，**不包含模型权重、专家特征缓存、数据清单或原始实验输出**，不能仅凭本目录独立复现上述历史结果；本次源码整理没有重新执行测试或模型。后续研究设计尚未作为新实验执行。
+
+## 从哪里读
+
+| 内容 | 入口 |
 |---|---|
-| M-APS模块 | 根据题目已有坐标限定一个棋盘token；不使用答案标签选点 |
-| 已有工程结果 | 64项小型检查、130项真实模型工程检查通过；2次反传、0次优化器更新 |
-| 已有实测范围 | 21题初始logP与原M差异0；231次指定点及所选value核对通过；外部15.550秒、退出码0 |
-| 新入口检查 | 28项训练入口检查、25项模拟生命周期检查及2项tiny优化器检查通过；tiny检查包含3次假模型更新 |
-| 完整拟合 | 入口已实现，真实APS拟合尚未执行；最多180更新、720采样槽、300秒软总预算，完整真实生命周期仍待实测 |
-| 研究结论 | 工程可用不表示已经拟合、学会自然寻址、具备可靠棋盘理解或达到正式M1标准 |
+| 基础融合与权重加载 | `src/goqueen/fusion.py`、`checkpoints.py` |
+| APS 单点选择与评分 | `src/goqueen/assisted_point.py`、`assisted_point_eval.py` |
+| APS 拟合入口 | `scripts/train_grounding_assisted_point.py`、`run_grounding_assisted_point.py` |
+| 固定 APS 权重的 54 题评估 | `scripts/eval_assisted_point_transfer.py`、`run_assisted_point_transfer.py` |
+| 自然 Q/K 状态转换及完整保存 | `src/goqueen/warm_qk.py` |
+| 自然 Q/K 训练入口 | `scripts/train_aps_warm_qk.py`、`run_aps_warm_qk.py` |
+| 实际训练题选择与曝光加权 | `src/goqueen/train_eval_selection.py`、`transfer_metrics.py` |
+| 固定训练题评估入口 | `scripts/eval_aps_warm_qk_train.py`、`run_aps_warm_qk_train.py` |
+| 保存记录核对与分层描述 | `scripts/inspect_aps_warm_qk_train.py`、`inspect_warm_qk_training_strata.py` |
+| 相关测试 | `tests/`；包括纯算术、模拟进程和合成小模型检查，性质各不相同 |
 
-本目录包含31个必要源码与说明文件。模型权重、专家特征、原始实验输出和运行记录均另行保存，未包含在仓库中。文档引用的已有结果是项目记录摘要，源码副本本身不构成独立运行复现。
+APS 实现复用旧 M/M-Key 脚本中的数据、摘要和报告函数，因此本目录保留这些导入依赖；它们不是建议重开旧实验。配置 `configs/mixed-train.json` 是既有数据／接口背景，当前 APS/QK 的固定运行合同见各入口及设计文件。
 
-## 实现
+## 技术说明
 
-- `src/goqueen/assisted_point.py`：保持原M的Q/K/V、共享行列编码、归一化及门控公式；每个样本只允许题目所问的一个棋盘token参与注意力。
-- `src/goqueen/assisted_point_eval.py`：在实际前向批次内核对坐标和规范提示、按对应顺序绑定点位；路由不读取占用标签。
-- `src/goqueen/checkpoints.py`：先核对变体、元数据、完整参数名称与形状，再复制权重；拒绝M、M-Key和M-APS之间误加载。
-- `scripts/check_assisted_point_engineering.py`：已有零更新工程入口，覆盖初始评分、实际mask/value、反传、恢复及清理；拒绝覆盖既有输出。
-- `scripts/train_grounding_assisted_point.py`：固定事实清单、初始化与采样，核对每次实际点位路由、优化器成员和零梯度路径，分别报告有效终点与拟合指标。
-- `scripts/run_grounding_assisted_point.py`：记录外部进程退出、信号及预算，拒绝覆盖与自动重试；真实拟合尚未运行。
+- [APS 设计](docs/grounding-assisted-point-design.md)、[工程](docs/assisted-point-engineering.md)、[拟合](docs/assisted-point-fit.md)。
+- [固定 APS 评估设计](docs/assisted-point-transfer-design.md)与[结果](docs/assisted-point-transfer-results.md)。
+- [Q/K 设计](docs/aps-warm-qk-design.md)、[工程](docs/aps-warm-qk-engineering.md)、[训练结果](docs/aps-warm-qk-fit.md)。
+- [固定最终权重的训练题评估与分层解释](docs/aps-warm-qk-train-eval.md)。
+- [已停止的注意力观察记录](docs/aps-warm-qk-attention-results.md)仅为历史说明；该观察器代码不属于本次最小发布闭包，没有配对结论或自动重跑计划。
 
-有限分数、math SDPA及dropout=0条件下，单点注意力直接返回所选value。同一层给该样本全部文本位置加入同一个桥接向量，整个冻结语言模型仍处理文本。44个Q/K及query归一化张量在这一路径中不起输出作用，保留它们以匹配原101个参数张量、40,438,795个参数值。
+文档中的 `outputs/`、缓存和权重路径指原始项目的依赖或记录，不代表这些文件随本源码发布。历史工程阶段中的未执行说明保留其当时语境，后续实测以对应结果页为准。
 
-## 源码检查
+## 环境与运行边界
 
-在本目录运行，使用Python 3.12环境安装固定依赖后，可执行不需要预训练权重的小型检查：
+项目使用 Python 3.12、PyTorch、Transformers、NumPy、safetensors 和 sgfmill；直接依赖及原环境锁定版本分别见 `requirements.txt`、`requirements-lock.txt`。第一方模块在 `src/goqueen/`。本目录没有打包第三方实现。
 
-```sh
-python -m pip install -r requirements.txt -r requirements-lock.txt
-python -m unittest discover -s tests -p 'test_assisted_point*.py' -v
-python -m unittest discover -s tests -p 'test_adapter_checkpoints.py' -v
-python -m unittest discover -s tests -p 'test_m_key.py' -v
-python -m unittest discover -s tests -p 'test_grounding_interaction.py' -v
-```
-
-上述检查使用小型张量或假模型，不等价于真实模型工程、完整拟合或一般棋盘能力验证。必要的M-Key模块是当前加载器的依赖；历史自然路由M脚本提供固定采样、参数摘要和来源复现辅助函数，不表示应再次运行旧实验。
-
-## 真实模型运行前提
-
-工程和后续拟合需要另行准备原始且摘要匹配的固定资料：
-
-- `models/Qwen3-0.6B/`：固定版本的官方Qwen模型和tokenizer。
-- `outputs/grounding-data/manifest.json`与对应5份专家特征缓存。
-- `outputs/grounding-conflict-audit/report.json`：固定21题来源选择资料。
-- `outputs/grounding-microfit/report.json`及其来源记录：原M初始化、采样和评分复现参考。
-
-入口会校验真实文件及摘要；缺少资料时不能把这份源码当作独立可执行的真实模型实验。当前APS真实工程已完成，不需要为发布重复执行。
-
-后续单次拟合保持真实21题、fresh seed42、Random(42)固定720槽、batch4、AdamW学习率0.001及weight_decay=0、CPU4线程、FP32与math SDPA。训练采用全词表值token CE，三类CE只是报告指标；固定180终点与中途评分分别记录。300秒是含加载、核对、训练、评分、保存和报告的软总预算，不能保证实际外部时长不超出。不会因为未拟合或超时自动重跑、延长预算或追加调参分支。
-
-详细协议见[APS设计](docs/grounding-assisted-point-design.md)，已有结果及覆盖限制见[APS工程核验](docs/assisted-point-engineering.md)，新增入口及小型检查范围见[单次拟合入口](docs/assisted-point-fit-entry.md)。辅助选点条件下成功只说明下游整体路径能有限拟合这21题；失败不能据此确定自然寻址失败原因或排除其他架构。
+模型实验还需另行准备 Qwen3-0.6B 基础权重／tokenizer、相应适配器权重、19×19 专家特征及带固定摘要的数据／历史记录。入口会检查精确来源、恢复容差和排他输出；这些前提缺失时不能把运行失败解释为模型学习失败，也不应为了直接启动而删除检查。说明中的历史调用顺序不是批量重跑指令。
