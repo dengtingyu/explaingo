@@ -6,3 +6,5 @@ outputs/
 *.safetensors
 *.npz
 .env
+vendor/
+.DS_Store
