@@ -1,52 +1,40 @@
-# GoQueen：19 路围棋研究源码
+# 当前训练代码地图
 
-当前代码入口为 **[Qwen3.8-27B / RTX 5090 训练代码与复现配置](reproduction/qwen38-27b-20261014/README.md)**。冻结官方 Qwen 底座和 KataGo，使用单卡 NF4 与 FP32、宽度 1024 的棋盘桥接模块；配方为固定 126,561 训练题、14,499 验证题、5 个完整 epoch、batch16、peak lr `1e-4`。这些数目是配置说明，实际训练集、棋谱、缓存、权重和运行结果均不随仓库发布，须从维护者另行取得。
+这里是 Qwen3.8-27B 版本。项目状态见[仓库首页](../README.md)，完整环境、参数、启动与权重读取说明见[固定复现入口](reproduction/qwen38-27b-20261014/README.md)。以下路径均相对本目录；不需要先阅读旧实验。
 
-- 主入口：`scripts/run_qwen38_expanded.py` → `scripts/train_qwen38_expanded.py`。
-- 当前环境、固定配方和实际训练源码摘要：[代码交接说明](reproduction/qwen38-27b-20261014/README.md)、[配置](reproduction/qwen38-27b-20261014/configuration.json)、[源码摘要](reproduction/qwen38-27b-20261014/source-pins.json)。
-- `sources.json` 仅含官方 KataGo 模型来源、版本与文件摘要，供当前特征生成入口核验；不含数据集、棋谱或标签。
+## 接入是怎样工作的
 
-下文保留历史小模型的辅助选点（APS）、从 APS 起步的自然 Q/K 训练及固定权重训练题评估。目标仍是让语言模型按文字坐标读取棋盘；可靠自然选点、通用围棋理解与棋力尚未建立。
+```text
+棋盘 → 冻结KataGo → 11组特征，每组361点×768维
+                              ↓ 加共享行列位置嵌入
+文字问题 → 冻结Qwen → 11处FP32跨注意力桥接 → Qwen输出头 → 空/黑/白评分
+                         ↑ query来自Qwen；key/value来自全部361点
+```
 
-## 历史 APS / QK 结果
+当前取 `trunk_after_block0` 至 `trunk_after_block10`，包括第一个外层块结束的特征；每个外层块内部有3个Transformer块。它不是只输入题目指定点：正确坐标写在文字提示中，桥接要从全部361点学习读取。
 
-| 路径 | 已保存的观察结果 | 边界 |
-|---|---|---|
-| APS 外部指定点位 | 21 道训练题全部正确；固定 54 题辅助评估全部正确 | 不证明模型自行找到所问点 |
-| APS 起步自然 Q/K，1,000 次更新 | 同一 54 题从 18/54 到 18/54；三类 CE 从 7.9614 降至 1.1670 | 分数变化，正确率未提高 |
-| 固定最终权重评估实际训练题 | 1,256/2,702（46.4841%）；宏平均召回率 43.2578%；按 4,000 次曝光加权为 43.4% | 训练题仍未充分拟合，不能唯一定位训练预算或接入结构 |
+Qwen共64层，在零起始 `[0,6,13,19,25,32,38,44,50,57,63]` 层前注入。桥接宽1024、8头，含归一化、Q/K/V/O投影、门控及共享位置嵌入。底座冻结，**全部101个桥接张量可训**，不是旧方案的44个Q/K张量。桥接以FP32计算，残差转回语言模型的BF16。
 
-这些是项目保存记录的摘要。本目录提供源码、测试源码、配置和技术说明，**不包含模型权重、专家特征缓存、数据清单或原始实验输出**，不能仅凭本目录独立复现上述历史结果；本次源码整理没有重新执行测试或模型。此处为历史 APS / QK 阶段摘要，不能用来代替上方 Qwen3.8-27B 配方的状态或效果。
+## 按这个顺序读代码
 
-## 历史 APS / QK 代码入口
+1. **[qwen38_fusion.py](src/goqueen/qwen38_fusion.py)**：`NarrowBoardCrossAttention` 是桥接；`Qwen38ExpertDecoderLayer` 是注入点；`Qwen38GoQueen` 管理冻结、特征绑定与101参数枚举。
+2. **[qwen38_training_runtime.py](src/goqueen/qwen38_training_runtime.py)**：`encode_questions` 构造聊天提示和答案token；`make_inputs` 处理padding；`forward_logits` 取最后真实位置；`score_batch` 给出两种首选与CE。
+3. **[train_qwen38_expanded.py](scripts/train_qwen38_expanded.py)**：`load_base` 加载NF4/BF16底座；主循环构造桥接/AdamW、绑定特征、计算loss、反传、裁剪、保存与评估。
+4. **[run_qwen38_expanded.py](scripts/run_qwen38_expanded.py)**：训练子进程入口，管理日志、退出状态与持久化收尾。启动命令见复现说明。
 
-| 内容 | 入口 |
-|---|---|
-| 基础融合与权重加载 | `src/goqueen/fusion.py`、`checkpoints.py` |
-| APS 单点选择与评分 | `src/goqueen/assisted_point.py`、`assisted_point_eval.py` |
-| APS 拟合入口 | `scripts/train_grounding_assisted_point.py`、`run_grounding_assisted_point.py` |
-| 固定 APS 权重的 54 题评估 | `scripts/eval_assisted_point_transfer.py`、`run_assisted_point_transfer.py` |
-| 自然 Q/K 状态转换及完整保存 | `src/goqueen/warm_qk.py` |
-| 自然 Q/K 训练入口 | `scripts/train_aps_warm_qk.py`、`run_aps_warm_qk.py` |
-| 实际训练题选择与曝光加权 | `src/goqueen/train_eval_selection.py`、`transfer_metrics.py` |
-| 固定训练题评估入口 | `scripts/eval_aps_warm_qk_train.py`、`run_aps_warm_qk_train.py` |
-| 保存记录核对与分层描述 | `scripts/inspect_aps_warm_qk_train.py`、`inspect_warm_qk_training_strata.py` |
-| 相关测试 | `tests/`；包括纯算术、模拟进程和合成小模型检查，性质各不相同 |
+## 按问题找文件
 
-APS 实现复用旧 M/M-Key 脚本中的数据、摘要和报告函数，因此本目录保留这些导入依赖；它们不是建议重开旧实验。配置 `configs/mixed-train.json` 是既有数据／接口背景，当前 APS/QK 的固定运行合同见各入口及设计文件。
+- **坐标、黑白、题目与棋盘有没有对上**：[`prepare_katago_training_sources.py`](scripts/prepare_katago_training_sources.py) 构造题目与整盘拆分；[`expanded_training_data.py`](src/goqueen/expanded_training_data.py) 校验点位、prompt、标签与特征身份。
+- **KataGo取了什么、361点顺序是否一致**：[`extract_features_cuda_batch.py`](scripts/extract_features_cuda_batch.py) 是当前提取入口；它仍调用 [`extract_features.py`](scripts/extract_features.py)、[`build_batch_data.py`](scripts/build_batch_data.py)、[`prepare_expanded_sources.py`](scripts/prepare_expanded_sources.py)，所以这三份依赖保留。
+- **特征是否进入了这一次前向/反传**：查看 `qwen38_fusion.py` 的 `bind_expert` 和训练循环对应上下文。绑定需覆盖forward至backward，不能提前清除。
+- **loss和评分是否一致**：训练用答案token的全词表CE。三类强制首选按 `empty, black, white` 同分取前者；全词表按token ID。`lm_head`先以BF16计算，再转FP32，不会恢复已丢失的精度。这些是排查入口，不是已定位的失败原因。
+- **epoch、尾批与梯度**：[`epoch_schedule.py`](src/goqueen/epoch_schedule.py) 管完整遍历；每轮尾批1题的loss仍除以16；训练入口检查底座无梯度，桥接裁剪范数1。
+- **缓存与恢复**：[`cached_features.py`](src/goqueen/cached_features.py) 管特征缓存；[`cloud_training_state.py`](src/goqueen/cloud_training_state.py) 保存adapter/Adam/RNG/cursor；[`cloud_checkpoint_transport.py`](src/goqueen/cloud_checkpoint_transport.py) 和 [`receive_cloud_checkpoint.py`](scripts/receive_cloud_checkpoint.py) 实现完整单元回执。
 
-## 技术说明
+## 测试与交接边界
 
-- [APS 设计](docs/grounding-assisted-point-design.md)、[工程](docs/assisted-point-engineering.md)、[拟合](docs/assisted-point-fit.md)。
-- [固定 APS 评估设计](docs/assisted-point-transfer-design.md)与[结果](docs/assisted-point-transfer-results.md)。
-- [Q/K 设计](docs/aps-warm-qk-design.md)、[工程](docs/aps-warm-qk-engineering.md)、[训练结果](docs/aps-warm-qk-fit.md)。
-- [固定最终权重的训练题评估与分层解释](docs/aps-warm-qk-train-eval.md)。
-- [已停止的注意力观察记录](docs/aps-warm-qk-attention-results.md)仅为历史说明；该观察器代码不属于本次最小发布闭包，没有配对结论或自动重跑计划。
+[`tests/`](tests/) 只保留当前链路相关测试：题目构造、缓存、epoch调度、完整保存/传送、launcher终态与内存边界。其中部分使用NumPy/Torch，小型夹具通过不代表学习效果达标。
 
-文档中的 `outputs/`、缓存和权重路径指原始项目的依赖或记录，不代表这些文件随本源码发布。历史工程阶段中的未执行说明保留其当时语境，后续实测以对应结果页为准。
+独立的最终27B权重评估命令尚未实现；不要把 `--resume` 当评分命令。已有加载与评分API的准确调用顺序见[复现说明中的权重读取部分](reproduction/qwen38-27b-20261014/README.md#已训练权重的读取与评分接口)。维护者另行提供同一运行的固定数据、RUN、完整checkpoint和原始评估记录。
 
-## 历史 APS / QK 环境与运行边界
-
-以下依赖属于历史小模型；Qwen3.8-27B 使用上方交接目录的云端依赖。历史项目使用 Python 3.12、PyTorch、Transformers、NumPy、safetensors 和 sgfmill；直接依赖及原环境锁定版本分别见 `requirements.txt`、`requirements-lock.txt`。第一方模块在 `src/goqueen/`。本目录没有打包第三方实现。
-
-模型实验还需另行准备 Qwen3-0.6B 基础权重／tokenizer、相应适配器权重、19×19 专家特征及带固定摘要的数据／历史记录。入口会检查精确来源、恢复容差和排他输出；这些前提缺失时不能把运行失败解释为模型学习失败，也不应为了直接启动而删除检查。说明中的历史调用顺序不是批量重跑指令。
+环境依赖只看 [`requirements-cloud.txt`](reproduction/qwen38-27b-20261014/requirements-cloud.txt)，参数只看 [`configuration.json`](reproduction/qwen38-27b-20261014/configuration.json)；不使用旧小模型配置。历史源码头部的draft注释属于原运行版本，当前状态以首页为准。

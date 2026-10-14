@@ -8,3 +8,13 @@ outputs/
 .env
 vendor/
 .DS_Store
+
+# Keep training inputs and state outside the code repository.
+data/
+*.sgf
+*.pt
+*.pth
+*.ckpt
+*.npy
+*.jsonl
+*.local.json
