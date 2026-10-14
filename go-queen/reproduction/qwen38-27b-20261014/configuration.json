@@ -1,0 +1,127 @@
+{
+  "actual_label_token_ids": {
+    "black": 11124,
+    "empty": 3092,
+    "white": 5603
+  },
+  "architecture": {
+    "adapter_parameters": 132803595,
+    "adapter_tensors": 101,
+    "decoder_layers": 64,
+    "expert_feature_names": [
+      "trunk_after_block0",
+      "trunk_after_block1",
+      "trunk_after_block2",
+      "trunk_after_block3",
+      "trunk_after_block4",
+      "trunk_after_block5",
+      "trunk_after_block6",
+      "trunk_after_block7",
+      "trunk_after_block8",
+      "trunk_after_block9",
+      "trunk_after_block10"
+    ],
+    "expert_feature_shape": [
+      11,
+      361,
+      768
+    ],
+    "expert_weights": "swa",
+    "injection_layers_zero_based": [
+      0,
+      6,
+      13,
+      19,
+      25,
+      32,
+      38,
+      44,
+      50,
+      57,
+      63
+    ],
+    "language_hidden_width": 5120
+  },
+  "automatic_training_or_retry": false,
+  "fixed_counts": {
+    "epochs": 5,
+    "examples_per_epoch": 126561,
+    "final_step_examples": 1,
+    "historical_reference_positions": 18,
+    "historical_reference_questions": 54,
+    "steps_per_epoch": 7911,
+    "total_exposures": 632805,
+    "total_optimizer_updates": 39555,
+    "train_games": 210,
+    "training_positions": 1260,
+    "training_questions": 126561,
+    "validation_games": 24,
+    "validation_positions": 144,
+    "validation_questions": 14499,
+    "warmup_steps": 396
+  },
+  "fixed_data_supplied_separately": true,
+  "label_order": [
+    "empty",
+    "black",
+    "white"
+  ],
+  "readme_commands": "Run from go-queen/ on an explicitly provisioned cloud Linux host",
+  "recipe": {
+    "adapter_dtype": "float32",
+    "attention_width": 1024,
+    "base_precision": "NF4/BF16 compute; numerically distinct from BF16",
+    "betas": [
+      0.9,
+      0.999
+    ],
+    "checkpoint_every_updates": 500,
+    "checkpoint_publication": "synchronous exact receiver ACK before next update or local pruning",
+    "checkpoint_retention": "initial, five epoch endpoints, latest two periodic boundaries",
+    "clip_norm": 1.0,
+    "cosine_floor_fraction": 0.1,
+    "cpu_threads": 4,
+    "drop_last": false,
+    "effective_batch": 16,
+    "endpoint": "fifth full epoch, no best-epoch selection",
+    "epochs": 5,
+    "eps": 1e-08,
+    "expert_width": 768,
+    "feature_cache_capacity": 1404,
+    "feature_cache_ram_reserve_bytes": 8589934592,
+    "gradient_checkpointing": "non-reentrant",
+    "hardware": "nf4-single-gpu",
+    "heads": 8,
+    "loss_normalization_denominator": 16,
+    "microbatch": 16,
+    "model": "Qwen/Qwen3.8-27B",
+    "nf4_double_quant": false,
+    "optimizer": "torch.optim.AdamW",
+    "peak_lr": 0.0001,
+    "persistence": {
+      "protocol": "goqueen-checkpoint-stream-v1",
+      "receiver_sha256": "299cec5dfe4baab679a682a83d390324a31009c9e5e366d5580e71be0e0f3809",
+      "target_id": "goqueen-persisted-training-v1"
+    },
+    "quantization_skip_modules": [
+      "lm_head",
+      "in_proj_a",
+      "in_proj_b"
+    ],
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "schedule": "one-based learning_rate(update_number,total_updates)",
+    "seed": 42,
+    "warmup_fraction": 0.01,
+    "weight_decay": 0.0
+  },
+  "required_external_inputs": {
+    "legacy_feature_manifest": "outputs/qwen38-legacy-reference/feature-manifest.json",
+    "legacy_features_directory": "outputs/qwen38-legacy-reference/features",
+    "legacy_manifest": "outputs/qwen38-legacy-reference/manifest.json",
+    "main_feature_manifest": "outputs/katago-training-features-cuda-20261013/manifest.json",
+    "main_features_directory": "outputs/katago-training-features-cuda-20261013/features",
+    "questions": "outputs/katago-training-sources-20261013/questions.jsonl",
+    "source_manifest": "outputs/katago-training-sources-20261013/manifest.json"
+  },
+  "training_data_in_repository": false
+}
