@@ -1,0 +1,29 @@
+{
+  "network": "kata1-tf3-b11c768-s11003M-d5973M-7gres",
+  "network_catalog": "https://katagotraining.org/networks/",
+  "katago_repository": "https://github.com/lightvector/KataGo",
+  "katago_commit": "d91ea855110dae533f0aada947b2b7d78cc8a4e1",
+  "files": [
+    {
+      "file": "kata1-tf3-b11c768-s11003M-d5973M-7gres.zip",
+      "bytes": 524240646,
+      "sha256": "e0c0a387c1787bee73f8ba7cebcd6e4acab7decff6ce128c8c0a847cc4f9fa4a",
+      "url": "https://media.katagotraining.org/uploaded/networks/zips/kata1/kata1-tf3-b11c768-s11003M-d5973M-7gres.zip",
+      "origin": "official download"
+    },
+    {
+      "file": "kata1-tf3-b11c768-s11003M-d5973M-7gres.bin.gz",
+      "bytes": 262039869,
+      "sha256": "93bdb63a3bfae4a70db0cb5265287495ecfc10b1ba1cc6814feeba1cdf055871",
+      "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-tf3-b11c768-s11003M-d5973M-7gres.bin.gz",
+      "origin": "official download"
+    },
+    {
+      "file": "kata1-tf3-b11c768-s11003M-d5973M-7gres.ckpt",
+      "bytes": 565042932,
+      "sha256": "59ccd9a0f2f472525b9a2432a16a6a92e5576c467262c9383d152e97337b6282",
+      "url": null,
+      "origin": "extracted from official zip"
+    }
+  ]
+}
