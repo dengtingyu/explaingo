@@ -1,14 +1,31 @@
-# ExplainGo / GoQueen
+# GoQueen：KataGo → Qwen
 
-19 路围棋版 QUEEN 研究项目。当前代码交接入口为 **[Qwen3.8-27B 单卡训练代码与复现配置](go-queen/reproduction/qwen38-27b-20261014/README.md)**。包含实际训练源码、依赖版本、模型来源配置和检查用测试源码；训练集、棋谱、缓存、权重及运行结果均另行提供，不放入本仓库。
+让 Qwen 读取 KataGo 的棋盘特征，回答 19 路棋盘某个坐标是**空、黑棋还是白棋**。当前版本冻结 KataGo 与 Qwen3.8-27B，只训练两者之间的桥接模块。
 
-历史 APS / QK 代码与技术说明保留在 **[go-queen/](go-queen/README.md)**。
+## 组员从这里开始
 
-- [项目总览与代码入口](go-queen/README.md)
-- [固定最终权重的训练题评估与分层结果](go-queen/docs/aps-warm-qk-train-eval.md)
-- [APS 起步 Q/K 训练结果](go-queen/docs/aps-warm-qk-fit.md)
-- [辅助选点评估结果](go-queen/docs/assisted-point-transfer-results.md)
+1. **看接入和排错位置**：[代码地图](go-queen/README.md)。先看 `qwen38_fusion.py`，再看 `qwen38_training_runtime.py` 和训练循环。
+2. **看训练参数、环境和启动方法**：[固定配方与复现说明](go-queen/reproduction/qwen38-27b-20261014/README.md)。机器可读参数在 [configuration.json](go-queen/reproduction/qwen38-27b-20261014/configuration.json)。
+3. **核对排查的源码版本**：[source-pins.json](go-queen/reproduction/qwen38-27b-20261014/source-pins.json)。10份正式运行源码保持原字节。
 
-仓库提供源码、测试源码、配置及已有实验的技术说明；**不包含模型权重、专家缓存、数据清单或原始实验输出**。运行模型实验需要另行准备这些依赖，不能仅凭本仓库独立复现历史成绩。
+## 当前进展（2026-10-14）
 
-历史小模型固定训练题评估为 1,256/2,702（46.4841%）；自然按坐标读取棋盘、一般泛化与棋力仍未建立。结果及适用范围见上述说明。
+- 五个完整 epoch 已完成：126,561道训练题，39,555次更新，batch16，AdamW 峰值学习率 `1e-4`；共训练132,803,595个桥接参数。
+- 固定终点验证集三类首选正确 **7,033 / 14,499（48.51%）**；全词表首选为 **7,140 / 14,499（49.24%）**。两者同分规则不同，不能混用。
+- 目前在排查识别效果偏低。训练完成不代表可靠棋盘读取已经建立；模型大小、特征接入、监督与数值精度的影响尚未被分别确定。
+- 保存分数中6,473题出现三类最高分并列。这是已观察现象，尚不能确定为效果不佳的唯一原因。最终权重在完整训练集上的固定评估尚未完成。
+
+## 目录分类
+
+```text
+go-queen/
+├── src/goqueen/       KataGo→Qwen桥接、token评分、数据接线、调度与保存
+├── scripts/          训练入口、特征提取、来源准备、checkpoint接收
+├── tests/            上述代码的单元与边界测试
+├── reproduction/     当前27B版本的固定参数、依赖、模型来源、许可和复现说明
+└── sources.json      官方KataGo模型来源配置
+```
+
+本分支只保留当前训练和接入所需代码及说明。训练集、棋谱、特征缓存、权重、逐题结果、日志和连接资料**不放 GitHub**，由维护者另行交付；仅克隆代码不能复现同一实验。
+
+旧0.6B、APS和warm-QK实验已移出当前目录，仍可在[整理前的历史提交](https://github.com/dengtingyu/explaingo/tree/ac10909a964615bcbe6553b1b1fa130e9cc7988a)回看。
